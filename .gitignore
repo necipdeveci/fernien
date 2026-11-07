@@ -1,0 +1,14 @@
+# Derleme çıktıları
+bin/
+obj/
+
+# Tek exe yayın çıktısı (GitHub Releases'e ayrıca yüklenir, depoya girmez)
+publish/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Claude Code yerel ayarları
+.claude/
