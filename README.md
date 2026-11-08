@@ -1,96 +1,120 @@
-# Fernien — Telefon ⇄ Bilgisayar Dosya Aktarımı
+<div align="center">
 
-USB kablo üzerinden Android telefon ile Windows bilgisayar arasında hızlı, iki yönlü dosya aktarımı yapan
-C# WinForms (.NET 10) masaüstü uygulaması.
+<img src="assets/banner.svg" alt="Fernien" width="100%">
 
-## Özellikler
+### Fast, two-way file transfer between Android and Windows over a USB cable.
 
-- **İki panelli gezgin:** solda bilgisayar, sağda telefon (Windows simgeleri, sıralama, doğal ad sıralaması).
-- **İki yönlü aktarım:** "Telefona gönder →" / "← Bilgisayara al" düğmeleri, sağ tık menüleri veya sürükle-bırak
-  (Windows Gezgini'nden telefon paneline de sürüklenebilir).
-- **Klasör aktarımı:** alt klasörler ve boş klasörler dahil.
-- **Anlık cihaz algılama:** telefon takılınca/çıkarılınca liste kendiliğinden güncellenir.
-- **Aktarım kuyruğu:** ilerleme çubuğu, anlık hız, kalan süre, iptal. Yarım kalan dosya temizlenir.
-- **Çakışma politikası:** aynı adda dosya varsa *Yeniden adlandır* (`ad (1).jpg`), *Üzerine yaz* veya *Atla*.
-- Telefonda yeni klasör, yeniden adlandırma (F2), silme (Del), boş alan gösterimi.
-- Telefondaki dosyaya çift tıklayınca geçici klasöre indirip varsayılan uygulamayla açar.
-- Değiştirilme tarihleri korunur.
+[![Release](https://img.shields.io/github/v/release/necipdeveci/fernien?style=for-the-badge&color=14B8A6&label=release)](https://github.com/necipdeveci/fernien/releases/latest)
+![Windows](https://img.shields.io/badge/Windows_10%2F11-0078D4?style=for-the-badge&logo=windows&logoColor=white)
+![.NET 10](https://img.shields.io/badge/.NET_10-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-1F383D?style=for-the-badge)](LICENSE)
 
-## Gereksinimler
+**English** · [Türkçe](README.tr.md)
 
-1. **adb.exe** (Google *SDK Platform-Tools*). Uygulama sırasıyla şuralara bakar:
-   uygulama klasöründeki `platform-tools\adb.exe`, `ANDROID_HOME` / `ANDROID_SDK_ROOT`,
-   `%LOCALAPPDATA%\Android\Sdk\platform-tools`, son olarak `PATH`.
-2. Telefonda **USB hata ayıklama** açık olmalı:
-   Ayarlar › Telefon hakkında › *Yapım numarası*na 7 kez dokunun → Geliştirici seçenekleri › *USB hata ayıklama*.
-   İlk bağlantıda telefonda çıkan izin penceresini onaylayın.
-3. Bazı markalar (ör. Samsung) için üreticinin Windows USB sürücüsü gerekebilir.
+</div>
 
-## Tek exe olarak yayınlama
+---
+
+## 📂 About
+
+Fernien is a dual-pane desktop file manager for moving files between an Android phone and a Windows PC. Your computer is on the left, your phone is on the right, and a single USB cable connects them.
+
+It ships as one portable executable with the .NET runtime and ADB built in, so there is nothing to install. Under the hood it speaks the ADB protocol directly, which allows byte-level progress reporting and keeps transfers of many small files fast.
+
+> [!NOTE]
+> The application interface is currently available in Turkish.
+
+## ✨ Features
+
+| | |
+| :--- | :--- |
+| 🗂️ **Dual-pane browser** | Computer and phone side by side, with Windows icons and natural name sorting |
+| 🔁 **Two-way transfer** | Send buttons, context menus or drag and drop, including from Windows Explorer |
+| 📁 **Folder support** | Copies whole folders, including subfolders and empty folders |
+| ⚡ **Instant detection** | The device list updates by itself when a phone is plugged in or removed |
+| 📊 **Transfer queue** | Progress bar, live speed, remaining time and cancel, with partial files cleaned up |
+| 🧩 **Conflict handling** | Rename (`name (1).jpg`), overwrite or skip when a file already exists |
+| ✏️ **Phone file operations** | New folder, rename (F2), delete (Del) and free space display |
+| 👆 **Open on double-click** | Downloads a phone file to a temporary folder and opens it in its default app |
+| 🕒 **Timestamps preserved** | Modification dates are kept after transfer |
+
+## 🚀 Getting started
+
+1. Download `fernien.exe` from the [Releases](https://github.com/necipdeveci/fernien/releases/latest) page and run it. It works on 64-bit Windows 10 and 11.
+2. On the phone, tap *Settings › About phone › Build number* seven times, then enable *Developer options › USB debugging*.
+3. Connect the phone with a USB cable and accept the authorization prompt.
+4. Transfer files with the send buttons or by drag and drop.
+
+> [!TIP]
+> Windows SmartScreen may warn about an unsigned executable. Choose **More info › Run anyway** to continue. Some phone brands, such as Samsung, may also need the manufacturer's USB driver.
+
+## ⚙️ How it works
+
+```mermaid
+flowchart LR
+    A["🖥️ MainForm<br/>dual-pane UI"] --> B["TransferQueue<br/>planning and execution"]
+    B --> C["IDeviceSession<br/>transfer-agnostic API"]
+    C --> D["ADB provider<br/>sync protocol client"]
+    D -- "TCP 127.0.0.1:5037" --> E["ADB server"]
+    E -- "USB" --> F["📱 Android device"]
+```
+
+Fernien uses no external ADB package. It talks to the ADB server at the protocol level, streaming files in 64 KB chunks over a single TCP connection and reusing connections across many small files. On devices that support them, the v2 commands (`LIS2` / `STA2`) handle file sizes above 4 GB.
+
+<details>
+<summary><b>Project structure</b></summary>
 
 ```
+Core/                  Transfer-agnostic interfaces
+  Abstractions.cs        IDeviceProvider, IDeviceSession, DeviceInfo, RemoteEntry
+  RemotePath.cs          POSIX path helpers
+Providers/Adb/         USB transfer through ADB
+  AdbSocket.cs           Connection to the ADB server and request framing
+  AdbClient.cs           host:devices-l, features, transport, shell, track-devices
+  AdbSyncService.cs      Sync protocol: STAT/STA2, LIST/LIS2, SEND, RECV
+  AdbServer.cs           Locating adb.exe and starting the server
+  AdbDeviceProvider.cs   Device list, live tracking, connection help texts
+  AdbDeviceSession.cs    Pooled sync connections, upload/download, mkdir/rm/mv, storage info
+  EmbeddedAdb.cs         Extracting the bundled ADB files
+Transfer/              Queue, built only on IDeviceSession
+  TransferJob.cs         Job state, progress, speed and remaining time
+  TransferQueue.cs       Planning, conflict resolution, sequential execution, cancel
+UI/                    Helper components: icons, sorting, input dialog
+MainForm.cs            Main window
+```
+
+</details>
+
+### Adding a new transport
+
+Transfer methods are pluggable. To add one, such as Wi-Fi:
+
+1. Write a class that implements `IDeviceProvider` and `IDeviceSession` (for example under `Providers/Wifi/`).
+2. Register it in the `MainForm` constructor with `_providers.Add(new WifiDeviceProvider());`.
+
+The queue, conflict handling, progress reporting and interface work with the new transport unchanged. ADB's own wireless debugging already works too: a phone paired through `adb pair` / `adb connect` appears in the list as a network device and behaves just like a cable connection.
+
+## 🛠️ Building from source
+
+With the [.NET 10 SDK](https://dotnet.microsoft.com/download) installed:
+
+```bash
 dotnet publish -p:PublishProfile=TekExe
 ```
 
-Çıktı: `publish\fernien.exe` (yaklaşık 54 MB). Visual Studio'da: projeye sağ tık › Yayımla › **TekExe** profili.
+The output is `publish\fernien.exe` (about 54 MB). In Visual Studio, right-click the project, choose **Publish** and select the **TekExe** profile.
 
-Exe tamamen bağımsızdır:
-- .NET çalışma zamanı içine gömülüdür; hedef bilgisayarda .NET kurmaya gerek yoktur.
-- ADB (`ThirdParty\platform-tools\`: adb.exe, AdbWinApi.dll, AdbWinUsbApi.dll, libwinpthread-1.dll, NOTICE.txt)
-  exe'ye gömülüdür. Sistemde adb bulunamazsa ilk çalıştırmada `%LOCALAPPDATA%\Fernien\platform-tools\<sürüm>\`
-  altına çıkarılır. Sistemde (ör. Android Studio ile) adb varsa sürüm çakışmasını önlemek için önce o kullanılır.
-- ADB'yi güncellemek için `ThirdParty\platform-tools\` içindeki dosyaları yenileriyle değiştirip yeniden yayınlayın.
+Fernien looks for a system ADB first to avoid version conflicts, checking the application's `platform-tools` folder, `ANDROID_HOME` / `ANDROID_SDK_ROOT`, `%LOCALAPPDATA%\Android\Sdk\platform-tools` and `PATH`. If none is found, the bundled copy is extracted to `%LOCALAPPDATA%\Fernien\platform-tools\<version>\` on first run. To update the bundled ADB, replace the files in `ThirdParty\platform-tools\` and publish again.
 
-> **Lisans notu:** Gömülü dosyalar Google'ın Android SDK Platform-Tools paketinden alınmıştır ve
-> Android SDK lisans koşullarına tabidir (bkz. `NOTICE.txt`). Exe'yi başkalarına dağıtmadan önce bu
-> koşulları kontrol edin.
+## ⚠️ Known limitations
 
-## Mimari
+- Android only. iPhone needs a different protocol (AFC / libimobiledevice), which could be added as a separate provider.
+- Dragging directly from the phone pane to Windows Explorer is not supported. Drag to the computer pane instead.
 
-```
-Core/                  Yöntemden bağımsız arayüzler
-  Abstractions.cs        IDeviceProvider (aktarım yöntemi), IDeviceSession (dosya işlemleri), DeviceInfo, RemoteEntry
-  RemotePath.cs          POSIX yol yardımcıları
-Providers/Adb/         USB kablo yöntemi (ADB)
-  AdbSocket.cs           ADB sunucusuna (127.0.0.1:5037) bağlantı ve istek çerçeveleme
-  AdbClient.cs           host:devices-l, features, transport, shell, track-devices
-  AdbSyncService.cs      sync protokolü: STAT/STA2, LIST/LIS2, SEND, RECV (64 KB parçalar)
-  AdbServer.cs           adb.exe bulma ve sunucuyu başlatma
-  AdbDeviceProvider.cs   cihaz listesi, anlık izleme, bağlantı yardım metinleri
-  AdbDeviceSession.cs    havuzlanmış sync bağlantıları, yükleme/indirme, mkdir/rm/mv, depolama bilgisi
-Transfer/              Kuyruk (yalnızca IDeviceSession kullanır)
-  TransferJob.cs         iş durumu, ilerleme, hız/kalan süre
-  TransferQueue.cs       planlama (klasör tarama, çakışma çözümü), sıralı yürütme, iptal
-UI/                    Yardımcı arayüz bileşenleri (simgeler, sıralama, giriş penceresi)
-MainForm.cs            Ana pencere
-```
+## 📄 License
 
-ADB için harici bir NuGet paketi kullanılmaz; ADB sunucusuyla doğrudan protokol düzeyinde konuşulur.
-Böylece aktarım tek bir TCP akışı üzerinden 64 KB'lık parçalarla yapılır, bayt düzeyinde ilerleme alınır ve
-çok sayıda küçük dosyada bağlantı tekrar kullanılır. Cihaz destekliyorsa 4 GB üzeri dosya boyutları için
-v2 komutları (`LIS2`/`STA2`) kullanılır.
+Copyright (C) 2026 Fernien contributors
 
-## Yeni bir aktarım yöntemi eklemek (ör. Wi‑Fi)
+This program is free software, released under the **GNU General Public License v3**. It is distributed in the hope that it will be useful, but **without any warranty**. See [LICENSE](LICENSE) for details.
 
-1. `IDeviceProvider` ve `IDeviceSession` arayüzlerini uygulayan yeni bir sınıf yazın (`Providers/Wifi/...`).
-2. `MainForm` yapıcısında `_providers.Add(new WifiDeviceProvider());` satırını ekleyin.
-
-Kuyruk, çakışma yönetimi, ilerleme ve arayüz değişmeden yeni yöntemle çalışır; cihazlar aynı listede görünür.
-Not: ADB zaten kablosuz hata ayıklamayı da destekler; `adb pair` / `adb connect` ile eşlenen bir telefon
-listede "Ağ" olarak görünür ve kablo gibi kullanılabilir.
-
-## Lisans
-
-Copyright (C) 2026 Fernien katkıda bulunanları
-
-Bu program özgür yazılımdır: Free Software Foundation tarafından yayımlanan **GNU Genel Kamu Lisansı
-sürüm 3** (GPLv3) koşulları altında yeniden dağıtabilir ve/veya değiştirebilirsiniz. Program yararlı olması
-umuduyla, ancak **HİÇBİR GARANTİ OLMADAN** dağıtılmaktadır. Ayrıntılar için [LICENSE](LICENSE) dosyasına bakın.
-
-Exe'ye gömülü ADB dosyaları bu projenin parçası değildir; Android Open Source Project'e aittir ve kendi
-lisansları (Apache 2.0 vb.) geçerlidir. Bkz. `ThirdParty/platform-tools/NOTICE.txt`.
-
-## Bilinen sınırlamalar
-
-- Yalnızca Android. iPhone farklı bir protokol (AFC/libimobiledevice) gerektirir; ayrı bir sağlayıcı olarak eklenebilir.
-- Telefon panelinden Windows Gezgini'ne doğrudan sürükleme desteklenmez (bilgisayar paneline sürükleyin).
+The bundled ADB files are not part of this project. They come from the Android Open Source Project under their own licenses and the Android SDK terms. See `ThirdParty/platform-tools/NOTICE.txt`, and review those terms before redistributing the executable.
